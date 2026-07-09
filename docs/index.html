@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Logic Pro Stem Exporter</title>
+    <meta
+      name="description"
+      content="Extract, split, rename, and download stems from Logic Pro projects — dry stems entirely in your browser, wet stems (effects + automation) via a macOS Logic Pro companion. Nothing is uploaded."
+    />
+    <link rel="icon" href="favicon.svg" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="site">
+        <div class="logo" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 12h2m4 0h2m4 0h2" opacity="0.35" />
+            <path d="M5 8v8M9 5v14M13 9v6M17 6v12M21 10v4" />
+          </svg>
+        </div>
+        <div style="flex: 1">
+          <h1>Logic Pro Stem Exporter</h1>
+          <p>
+            Pull per-track stems out of a Logic Pro project, split overdub takes, rename them, and download a ZIP —
+            all in your browser. For stems <em>with</em> effects &amp; automation baked in, use the one-line macOS
+            companion below.
+          </p>
+        </div>
+        <button id="themeBtn" class="btn small" title="Theme" aria-label="Toggle theme">🌗</button>
+      </header>
+
+      <!-- ingest -->
+      <section class="card">
+        <div id="drop">
+          <div class="big">Drop a <code>.logicx</code> project folder or an audio folder here</div>
+          <div class="sub">Dry audio is read straight from the project's <code>Media/</code> folder. Files never leave your device.</div>
+          <div class="pickers">
+            <label class="btn primary filebtn">
+              Choose project / folder…
+              <input id="pickDir" type="file" webkitdirectory directory multiple />
+            </label>
+            <label class="btn filebtn">
+              Choose audio files…
+              <input id="pickFiles" type="file" accept="audio/*,.wav,.aif,.aiff,.caf,.m4a,.flac" multiple />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- wet stems helper -->
+      <section class="card" id="wetCard">
+        <div class="head" id="wetHead">
+          <h2 style="margin: 0">Wet stems — effects &amp; automation (macOS + Logic Pro)</h2>
+          <button id="wetToggle" aria-expanded="false" aria-label="Toggle wet-stem instructions">＋</button>
+        </div>
+        <div class="body">
+          <p class="lede">
+            A browser can't run Logic's Audio Unit plugins, so stems with the channel-strip effects and automation
+            rendered in must be bounced by Logic Pro itself. Run the companion script on your Mac — it drives Logic's
+            <em>Export All Tracks as Audio Files</em> — then drop the output folder back here to rename, split, and ZIP it.
+          </p>
+          <div class="wet-opts">
+            <div class="field">
+              <label for="wetOut">Output folder</label>
+              <input id="wetOut" type="text" value="~/Desktop/Stems" spellcheck="false" />
+            </div>
+            <div class="field">
+              <label for="wetFormat">Format</label>
+              <select id="wetFormat">
+                <option value="wav">WAV</option>
+                <option value="aiff">AIFF</option>
+                <option value="caf">CAF</option>
+              </select>
+            </div>
+          </div>
+          <div class="cmd-row">
+            <code id="wetCmd">./scripts/bounce-wet-stems.sh --out "~/Desktop/Stems" --format wav --bit-depth 24 "/path/to/Project.logicx"</code>
+            <button id="copyCmd" class="btn small">Copy</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- settings -->
+      <section class="card">
+        <h2>Settings</h2>
+        <div class="settings-grid">
+          <div class="field">
+            <label for="fmt">Output format</label>
+            <select id="fmt">
+              <option value="passthrough">Passthrough — exact copy, renamed (lossless)</option>
+              <option value="wav16">Convert to WAV · 16-bit</option>
+              <option value="wav24">Convert to WAV · 24-bit</option>
+            </select>
+            <span class="hint">Passthrough copies the original file bytes. Splitting always decodes to WAV.</span>
+          </div>
+
+          <div class="field">
+            <label for="tpl">Filename template</label>
+            <input id="tpl" type="text" value="{project}_{track}" spellcheck="false" />
+            <span class="hint">Tokens: <code>{project}</code> <code>{track}</code> <code>{take}</code></span>
+          </div>
+
+          <div class="field">
+            <div class="check"><input id="split" type="checkbox" /><label for="split">Split into takes by reference length</label></div>
+            <span class="hint">For multi-take overdub files. Off by default (per-track stems).</span>
+            <div id="refRow" class="field" hidden style="margin-top: 8px">
+              <label for="refSelect">Reference track</label>
+              <select id="refSelect"></select>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="check"><input id="includeAll" type="checkbox" /><label for="includeAll">Include all audio inside the package</label></div>
+            <span class="hint">By default only <code>Media/</code> and <code>Audio Files/</code> are selected — not freeze/bounce internals.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- list -->
+      <section class="card">
+        <h2>Tracks</h2>
+        <div id="empty" class="empty">No audio yet — drop a project or folder above.</div>
+        <div id="tableWrap" hidden>
+          <table>
+            <thead>
+              <tr>
+                <th><input id="selectAll" type="checkbox" aria-label="Select all" /></th>
+                <th>Project</th>
+                <th>Track</th>
+                <th>Source</th>
+                <th>Length</th>
+                <th>Size</th>
+                <th>Ref</th>
+              </tr>
+            </thead>
+            <tbody id="list"></tbody>
+          </table>
+        </div>
+
+        <div class="actions">
+          <button id="zipBtn" class="btn primary" disabled>Download ZIP</button>
+          <button id="dlBtn" class="btn" disabled>Download individually</button>
+          <button id="clearBtn" class="btn small">Clear</button>
+          <span class="spacer"></span>
+          <span id="selCount">0 of 0 selected</span>
+        </div>
+        <div id="status"></div>
+      </section>
+
+      <footer class="site">
+        <div><span class="lock">● Private</span> — every file is processed locally in your browser and never uploaded.</div>
+        <div>
+          <a href="https://github.com/cportka/export-logic-pro-stems">Source on GitHub</a> ·
+          Built with the <a href="https://github.com/cportka/claude-plugins">Portka</a> standard.
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

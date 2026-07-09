@@ -1,0 +1,37 @@
+{
+  "extraKnownMarketplaces": {
+    "portka-tools": {
+      "source": {
+        "source": "github",
+        "repo": "cportka/claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "video-bug-analyzer@portka-tools": true,
+    "app-website-evaluator@portka-tools": true,
+    "tab-chord-formatter@portka-tools": true,
+    "repo-bootstrap@portka-tools": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git pull:*)",
+      "Bash(git fetch:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(gh workflow:*)",
+      "Bash(gh issue:*)"
+    ]
+  }
+}
