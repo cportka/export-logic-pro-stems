@@ -35,7 +35,8 @@ PROJECTS=()
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPLESCRIPT="$SCRIPT_DIR/bounce-wet-stems.applescript"
 
-usage() { sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; }
+# Print the leading comment header (stops at the first non-comment line, so it can't leak code).
+usage() { awk 'NR==1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -72,7 +73,7 @@ if ! osascript -e 'id of application "Logic Pro"' >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$OUT"
+[[ -n "$DRY_RUN" ]] || mkdir -p "$OUT"
 echo "Output: $OUT   Format: $FORMAT ${BIT_DEPTH}-bit   Projects: ${#PROJECTS[@]}"
 
 status=0
@@ -87,7 +88,7 @@ for raw in "${PROJECTS[@]}"; do
   proj="$(cd "$(dirname "$proj")" && pwd)/$(basename "$proj")"
   name="$(basename "${proj%.logicx}")"
   dest="$OUT/$name"
-  mkdir -p "$dest"
+  [[ -n "$DRY_RUN" ]] || mkdir -p "$dest"
 
   echo ""
   echo "▶ $name"

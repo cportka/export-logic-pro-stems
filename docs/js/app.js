@@ -137,7 +137,14 @@ const channelsOf = (audioBuffer) => {
   return chans;
 };
 
-const wavBitDepth = () => (state.settings.format === 'wav24' ? 24 : 16);
+// Bit depth for a decoded/encoded output. When splitting under "passthrough" we still have to
+// decode+re-encode, so preserve the source's own depth (24-bit sources stay 24-bit) instead of
+// silently quantizing to 16-bit.
+function outputBitDepth(item) {
+  if (state.settings.format === 'wav24') return 24;
+  if (state.settings.format === 'wav16') return 16;
+  return item?.meta?.bitDepth >= 24 ? 24 : 16; // passthrough being decoded for a split
+}
 
 /**
  * Turn a selected item into one or more { name, data } output entries, honoring the
@@ -154,7 +161,7 @@ async function renderItem(item, refDurationSec) {
 
   const audio = await decodeFile(item.file, item.meta?.sampleRate);
   const chans = channelsOf(audio);
-  const bd = wavBitDepth();
+  const bd = outputBitDepth(item);
 
   if (!splitting) {
     const data = encodeWav(chans, audio.sampleRate, bd);
@@ -428,9 +435,9 @@ function wire() {
   });
   $('#includeAll').addEventListener('change', (e) => {
     state.settings.includeAll = e.target.checked;
-    // reselect rows according to the new rule
+    // reselect rows according to the new rule, then re-render so the row checkboxes match
     for (const i of state.items) i.selected = shouldIngest(i.info, { includeAll: state.settings.includeAll });
-    updateCounts();
+    render();
   });
 
   // wet helper

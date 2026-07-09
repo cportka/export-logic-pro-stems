@@ -84,23 +84,28 @@ on findExportItem()
 	end tell
 end findExportItem
 
--- Try to set a pop-up button whose current value we can match. Wrapped so failure is
--- non-fatal — many Logic versions default sensibly and you can adjust by hand if needed.
+-- Try to set the format and bit-depth pop-up buttons by matching a menu item label. Wrapped so
+-- failure is non-fatal — many Logic versions default sensibly and you can adjust by hand. Label
+-- text varies across versions, so we try a few spellings for each popup.
 on trySetPopup(fmt, bitDepth)
 	tell application "System Events" to tell process "Logic Pro"
 		try
 			set theSheet to my frontSheet()
 			if theSheet is missing value then return
-			set fmtLabel to my formatLabel(fmt)
+			set wanted to {my formatLabel(fmt)} & my depthLabels(bitDepth)
 			repeat with pb in (pop up buttons of theSheet)
 				try
 					click pb
 					delay 0.3
-					if (exists (menu item fmtLabel of menu 1 of pb)) then
-						click menu item fmtLabel of menu 1 of pb
-					else
-						key code 53 -- Escape: leave this popup unchanged
-					end if
+					set matched to false
+					repeat with w in wanted
+						if (exists (menu item (w as string) of menu 1 of pb)) then
+							click menu item (w as string) of menu 1 of pb
+							set matched to true
+							exit repeat
+						end if
+					end repeat
+					if not matched then key code 53 -- Escape: leave this popup unchanged
 				end try
 			end repeat
 		end try
@@ -112,6 +117,11 @@ on formatLabel(fmt)
 	if fmt is "caf" then return "CAF"
 	return "WAVE (Broadcast)"
 end formatLabel
+
+-- Candidate labels for the bit-depth popup (spelling differs across Logic versions).
+on depthLabels(bitDepth)
+	return {bitDepth & " Bit", bitDepth & "-bit", bitDepth & " bit", "Bit Depth: " & bitDepth}
+end depthLabels
 
 on frontSheet()
 	tell application "System Events" to tell process "Logic Pro"

@@ -52,6 +52,19 @@ test('buildStemName fills tokens and cleans up empties', () => {
   assert.equal(buildStemName('{project}_{track}_{take}', { project: 'P', track: 'T', take: null, ext: 'wav' }), 'P_T.wav');
 });
 
+test('buildStemName inserts $-sequences literally and supports an {ext} token', () => {
+  // a raw String.replace would treat $& / $$ in a name as replacement patterns
+  assert.equal(buildStemName('{project}_{track}', { project: 'A$&B', track: 'T', ext: '.wav' }), 'A$&B_T.wav');
+  assert.equal(buildStemName('{project}_{track}', { project: 'A$$B', track: 'T', ext: '.wav' }), 'A$$B_T.wav');
+  // {ext} token is substituted and not double-appended
+  assert.equal(buildStemName('{project}_{track}{ext}', { project: 'P', track: 'T', ext: '.wav' }), 'P_T.wav');
+});
+
+test('buildZip rejects more than 65535 entries', () => {
+  const many = Array.from({ length: 65536 }, (_, i) => ({ name: `f${i}`, data: new Uint8Array(0) }));
+  assert.throws(() => buildZip(many), /65535/);
+});
+
 test('classifyPath understands .logicx packages and plain folders', () => {
   const media = classifyPath('MySong.logicx/Media/Track 1.aif');
   assert.deepEqual(media, { project: 'MySong', source: 'logic', inMedia: true, inExcluded: false, name: 'Track 1.aif' });

@@ -66,6 +66,43 @@ def is_reference(name: str, project: str) -> bool:
     return any(k and k in up for k in keys)
 
 
+def uniquify(name: str, used: set) -> str:
+    """Return a filename unique within `used`, appending _2, _3, … before the extension
+    (mirrors the web app's uniquifyNames so two sources with the same basename don't clobber)."""
+    if name not in used:
+        used.add(name)
+        return name
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem, ext = name, ""
+    else:
+        ext = "." + ext
+    n = 2
+    while f"{stem}_{n}{ext}" in used:
+        n += 1
+    final = f"{stem}_{n}{ext}"
+    used.add(final)
+    return final
+
+
+def classify(parts):
+    """Classify path segments (including the filename) the way the web app's classifyPath does.
+
+    Returns (project_or_None, in_media, in_excluded, is_logic). A .logicx package is detected at
+    ANY depth, so pointing the tool at a parent folder still excludes Freeze Files/ etc. and names
+    the project after the package rather than the parent folder.
+    """
+    logic_idx = next((i for i, p in enumerate(parts) if p.lower().endswith(".logicx")), -1)
+    if logic_idx >= 0:
+        project = strip_ext(parts[logic_idx])
+        rest = [s.lower() for s in parts[logic_idx + 1:]]
+        seg0 = rest[0] if rest else ""
+        in_media = len(rest) > 1 and seg0 in MEDIA_ROOTS
+        in_excluded = seg0 in EXCLUDED_ROOTS
+        return project, in_media, in_excluded, True
+    return None, True, False, False
+
+
 def read_extended_float80(b: bytes) -> float:
     """Decode an 80-bit IEEE 754 extended float (AIFF sample rate)."""
     sign = -1 if b[0] & 0x80 else 1
@@ -118,21 +155,27 @@ def duration_of(path: str):
     return None
 
 
-def split_wav(src: str, ref_seconds: float, out_dir: str, project: str, track: str, template: str, dry_run: bool):
-    """Slice a WAV into equal takes of ref_seconds. Returns the number of files written."""
-    with wave.open(src, "rb") as w:
+def split_wav(src: str, ref_seconds: float, out_dir: str, project: str, track: str, template: str, dry_run: bool, used: set):
+    """Slice a WAV into equal takes of ref_seconds. Returns the number of files written, or 0 to
+    signal the caller should fall back to a whole-file copy (too short, or unparseable by stdlib
+    `wave` — e.g. a 24-bit WAVE_FORMAT_EXTENSIBLE or float WAV, common in real DAW exports)."""
+    try:
+        wav_in = wave.open(src, "rb")
+    except Exception as e:
+        print(f"  warning: cannot split {os.path.basename(src)} ({e}); copying whole instead.", file=sys.stderr)
+        return 0
+    with wav_in as w:
         params = w.getparams()
-        fr = params.framerate
-        take_frames = round(ref_seconds * fr)
-        total = params.nframes
-        n = total // take_frames if take_frames > 0 else 0
+        take_frames = round(ref_seconds * params.framerate)
+        n = params.nframes // take_frames if take_frames > 0 else 0
         if n < 1:
             return 0
         written = 0
+        tpl = template if "{take}" in template else template + "_{take}"
         for i in range(n):
             w.setpos(i * take_frames)
             frames = w.readframes(take_frames)
-            name = build_name(template if "{take}" in template else template + "_{take}", project, track, take=i + 1, ext=".wav")
+            name = uniquify(build_name(tpl, project, track, take=i + 1, ext=".wav"), used)
             dest = os.path.join(out_dir, name)
             print(f"  split  {name}")
             if not dry_run:
@@ -155,25 +198,23 @@ def collect_inputs(inputs, include_all: bool):
                 project = os.path.basename(os.path.dirname(path)) or "audio"
                 yield project, strip_ext(os.path.basename(path)), path
             continue
-        if path.lower().endswith(".logicx"):
-            project = strip_ext(os.path.basename(path))
-            for root, _dirs, files in os.walk(path):
-                rel = os.path.relpath(root, path).lower().replace("\\", "/")
-                seg0 = rel.split("/", 1)[0]
-                if not include_all:
-                    if seg0 in EXCLUDED_ROOTS:
+        # Walk any directory and classify each file by whether a .logicx package encloses it,
+        # so a nested package is handled correctly (not walked as flat audio).
+        base_parent = os.path.dirname(path.rstrip("/\\"))
+        default_project = os.path.basename(path.rstrip("/\\")) or "audio"
+        for root, _dirs, files in os.walk(path):
+            for fn in files:
+                if not is_audio(fn):
+                    continue
+                full = os.path.join(root, fn)
+                parts = os.path.relpath(full, base_parent).replace("\\", "/").split("/")
+                project, in_media, in_excluded, is_logic = classify(parts)
+                if is_logic:
+                    if not include_all and (in_excluded or not in_media):
                         continue
-                    if seg0 not in MEDIA_ROOTS:
-                        continue
-                for fn in files:
-                    if is_audio(fn):
-                        yield project, strip_ext(fn), os.path.join(root, fn)
-        else:  # a plain folder of audio → one project named after the folder
-            project = os.path.basename(path.rstrip("/\\")) or "audio"
-            for root, _dirs, files in os.walk(path):
-                for fn in files:
-                    if is_audio(fn):
-                        yield project, strip_ext(fn), os.path.join(root, fn)
+                    yield project, strip_ext(fn), full
+                else:
+                    yield default_project, strip_ext(fn), full
 
 
 def main(argv=None) -> int:
@@ -219,16 +260,17 @@ def main(argv=None) -> int:
             if not ref_seconds:
                 print("  warning: no usable reference length found — exporting whole files.", file=sys.stderr)
 
+        used = set()  # de-duplicate output names within this project
         for track, path in tracks:
             ext = os.path.splitext(path)[1].lower()
             do_split = bool(args.split and ref_seconds and path != ref_path and ext in (".wav", ".wave"))
             if do_split:
-                wrote = split_wav(path, ref_seconds, out_dir, project, track, args.template, args.dry_run)
+                wrote = split_wav(path, ref_seconds, out_dir, project, track, args.template, args.dry_run, used)
                 if wrote:
                     total_written += wrote
                     continue
-                # fall through to a whole-file copy if it was too short to split
-            name = build_name(args.template, project, track, ext=ext)
+                # fall through to a whole-file copy if it was too short or unreadable to split
+            name = uniquify(build_name(args.template, project, track, ext=ext), used)
             dest = os.path.join(out_dir, name)
             print(f"  copy   {name}")
             if not args.dry_run:
