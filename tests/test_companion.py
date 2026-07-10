@@ -113,6 +113,16 @@ class Companion(unittest.TestCase):
         code, _, _ = req("POST", self.port, "/bounce-wet", token=TOKEN, body={"out": "/tmp/x"})
         self.assertEqual(code, 400)
 
+    def test_dryrun_bounce_reports_no_files_even_with_stale_output(self):
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / "old.wav").write_bytes(b"x" * 10)  # leftover from a prior real bounce
+            code, _, body = req("POST", self.port, "/bounce-wet", token=TOKEN,
+                                body={"projects": ["/some/Project.logicx"], "out": d, "dryRun": True})
+            self.assertEqual(code, 200)
+            data = json.loads(body)
+            self.assertEqual(data["files"], [])  # dry-run wrote nothing; don't report the stale file
+            self.assertFalse(data["settled"])
+
 
 class Settle(unittest.TestCase):
     def test_waits_for_files_to_appear_and_stabilize(self):

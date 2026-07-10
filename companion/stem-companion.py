@@ -288,9 +288,12 @@ class Handler(BaseHTTPRequestHandler):
             argv += ["--dry-run"]
         argv += [os.path.abspath(os.path.expanduser(p)) for p in projects]
         code, so, se = run_script(argv, timeout=3600)
-        # Logic renders in the background; on success wait for the output to settle so the reported
-        # file list reflects the finished bounce, not a half-written folder.
-        if code == 0 and os.path.isdir(out):
+        # Logic renders in the background; on a real (non-dry) success wait for the output to settle
+        # so the reported file list reflects the finished bounce, not a half-written folder. A
+        # --dry-run writes nothing, so report nothing (don't surface stale files already in `out`).
+        if body.get("dryRun"):
+            files, settled = [], False
+        elif code == 0 and os.path.isdir(out):
             files, settled = wait_for_settle(out), True
         else:
             files, settled = (list_files(out) if os.path.isdir(out) else []), False

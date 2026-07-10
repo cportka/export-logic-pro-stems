@@ -172,6 +172,17 @@ def convert_pcm_depth(frames: bytes, src_width: int, dst_width: int) -> bytes:
     return bytes(out)
 
 
+def would_reencode(src: str, target_width: int) -> bool:
+    """True if `src` is a PCM WAV that reencode_wav_depth would actually convert to target_width
+    (used so --dry-run can preview a conversion honestly without writing anything)."""
+    try:
+        with wave.open(src, "rb") as w:
+            sw = w.getsampwidth()
+        return sw in (2, 3) and sw != target_width
+    except Exception:
+        return False
+
+
 def reencode_wav_depth(src: str, dest: str, target_width: int) -> bool:
     """Re-encode a PCM WAV to target_width (2 or 3 bytes). Returns True if it wrote dest, or False
     if the source can't be converted (non-PCM, unusual width, or already at target) — the caller
@@ -314,8 +325,13 @@ def main(argv=None) -> int:
                 # fall through to a whole-file copy if it was too short or unreadable to split
             name = uniquify(build_name(args.template, project, track, ext=ext), used)
             dest = os.path.join(out_dir, name)
-            if target_width and ext in (".wav", ".wave") and not args.dry_run and reencode_wav_depth(path, dest, target_width):
-                print(f"  wav{target_width * 8}  {name}")
+            convert = bool(target_width and ext in (".wav", ".wave") and would_reencode(path, target_width))
+            if convert:
+                label = f"wav{target_width * 8}"
+                if not args.dry_run and not reencode_wav_depth(path, dest, target_width):
+                    label = "copy"  # unexpected failure at write time → fall back to a copy
+                    shutil.copy2(path, dest)
+                print(f"  {label}  {name}")
             else:
                 print(f"  copy   {name}")
                 if not args.dry_run:

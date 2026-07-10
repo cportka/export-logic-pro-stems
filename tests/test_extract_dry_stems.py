@@ -114,6 +114,18 @@ class Format(unittest.TestCase):
                 self.assertEqual(r.getnframes(), 10)
                 self.assertEqual(r.getnchannels(), 2)
 
+    def test_would_reencode(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = pathlib.Path(d) / "a.wav"
+            with wave.open(str(src), "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(3)
+                w.setframerate(44100)
+                w.writeframes(b"\x00\x00\x00" * 5)
+            self.assertTrue(eds.would_reencode(str(src), 2))   # 24 -> 16 would convert
+            self.assertFalse(eds.would_reencode(str(src), 3))  # already 24-bit
+            self.assertFalse(eds.would_reencode("/nope.wav", 2))
+
     def test_reencode_noop_when_same_width(self):
         with tempfile.TemporaryDirectory() as d:
             src = pathlib.Path(d) / "s.wav"
