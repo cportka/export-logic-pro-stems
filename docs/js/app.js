@@ -22,6 +22,7 @@ import {
   formatDuration,
   buildBounceCommand,
 } from './stem-lib.js';
+import * as companion from './companion.js';
 
 /* --------------------------------------------------------------------- state */
 
@@ -535,12 +536,9 @@ function wire() {
       setStatus('Copy failed — select the command and copy manually.', true);
     }
   });
-  $('#wetHead').addEventListener('click', () => {
-    const card = $('#wetCard');
-    card.classList.toggle('open');
-    $('#wetToggle').textContent = card.classList.contains('open') ? '－' : '＋';
-    $('#wetToggle').setAttribute('aria-expanded', card.classList.contains('open') ? 'true' : 'false');
-  });
+  wireCollapse('#wetHead', '#wetCard', '#wetToggle');
+  wireCollapse('#companionHead', '#companionCard', '#companionToggle');
+  wireCompanion();
 
   // selection + actions
   $('#selectAll').addEventListener('change', (e) => {
@@ -592,6 +590,211 @@ function wire() {
 
   render();
   setStatus('Drop a .logicx project folder or an audio folder to begin.');
+}
+
+/* --------------------------------------------------------- collapsible cards */
+
+function wireCollapse(headSel, cardSel, toggleSel) {
+  const head = $(headSel);
+  const card = $(cardSel);
+  if (!head || !card) return;
+  head.addEventListener('click', () => {
+    const open = card.classList.toggle('open');
+    const t = $(toggleSel);
+    if (t) {
+      t.textContent = open ? '－' : '＋';
+      t.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+  });
+}
+
+function openCollapse(cardSel, toggleSel) {
+  const card = $(cardSel);
+  if (!card || card.classList.contains('open')) return;
+  card.classList.add('open');
+  const t = $(toggleSel);
+  if (t) {
+    t.textContent = '－';
+    t.setAttribute('aria-expanded', 'true');
+  }
+}
+
+/* ------------------------------------------------------------ local companion */
+
+function setCompanionStatus(text, on) {
+  const s = $('#companionStatus');
+  s.textContent = text;
+  s.classList.toggle('on', !!on);
+}
+
+function cxSetResult(text, isError) {
+  const r = $('#cxResult');
+  r.textContent = text || '';
+  r.style.color = isError ? 'var(--err)' : '';
+}
+
+function refreshWetGate() {
+  const info = companion.current()?.info;
+  const b = $('#cxWet');
+  if (b) {
+    b.disabled = !info?.logic;
+    b.title = info?.logic ? '' : 'Logic Pro was not detected on the companion machine';
+  }
+}
+
+function setBusyCx(busy, msg) {
+  for (const id of ['#cxDry', '#cxWet', '#cxScan', '#cxConnect', '#cxDisconnect']) {
+    const b = $(id);
+    if (b) b.disabled = busy;
+  }
+  if (!busy) refreshWetGate();
+  if (busy && msg) cxSetResult(msg);
+}
+
+function showCompanionConnected(info) {
+  $('#connectForm').hidden = true;
+  $('#connectedPanel').hidden = false;
+  $('#cxInfo').textContent = [
+    `companion ${info.version}`,
+    info.macos ? 'macOS' : info.platform,
+    info.logic ? 'Logic Pro detected' : 'Logic Pro not found',
+  ].join(' · ');
+  setCompanionStatus('Connected', true);
+  refreshWetGate();
+}
+
+function showCompanionDisconnected() {
+  $('#connectForm').hidden = false;
+  $('#connectedPanel').hidden = true;
+  setCompanionStatus('Not connected', false);
+}
+
+async function companionConnect(base, token, { announce = true } = {}) {
+  try {
+    const info = await companion.connect({ base, token });
+    showCompanionConnected(info);
+    openCollapse('#companionCard', '#companionToggle');
+    return true;
+  } catch (err) {
+    if (announce) {
+      setCompanionStatus('Connection failed', false);
+      cxSetResult(`Could not connect: ${err.message}. Is the companion running, and the token correct?`, true);
+    }
+    return false;
+  }
+}
+
+function summarizeRun(data) {
+  const lines = [data.ok ? '✓ done' : `✗ failed (exit ${data.code})`];
+  if (data.files?.length) lines.push(`${data.files.length} file(s) in ${data.out}:`, ...data.files.map((f) => '  ' + f));
+  if (data.stdout?.trim()) lines.push('', data.stdout.trim());
+  if (data.stderr?.trim()) lines.push('', data.stderr.trim());
+  return lines.join('\n');
+}
+
+function renderProjectHits(projects) {
+  const box = $('#cxProjects');
+  box.textContent = '';
+  if (!projects?.length) {
+    box.append(el('span', { className: 'hint', textContent: 'No .logicx projects found there.' }));
+    return;
+  }
+  box.append(el('span', { className: 'hint', textContent: 'Found — click to use: ' }));
+  for (const p of projects) {
+    const b = el('button', { className: 'btn small project-hit', textContent: p.name, title: p.path });
+    b.addEventListener('click', () => {
+      $('#cxProject').value = p.path;
+    });
+    box.append(b);
+  }
+}
+
+function wireCompanion() {
+  $('#copyRun').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('#companionRun').textContent);
+      cxSetResult('Command copied to clipboard.');
+    } catch {
+      cxSetResult('Copy failed — select the command and copy manually.', true);
+    }
+  });
+
+  $('#cxConnect').addEventListener('click', async () => {
+    const base = companion.normalizeBase($('#cxUrl').value);
+    const token = $('#cxToken').value.trim();
+    if (!base || !token) return cxSetResult('Enter the companion address and pairing token.', true);
+    setCompanionStatus('Connecting…', false);
+    await companionConnect(base, token);
+  });
+
+  $('#cxDisconnect').addEventListener('click', () => {
+    companion.forget();
+    showCompanionDisconnected();
+    cxSetResult('');
+  });
+
+  $('#cxScan').addEventListener('click', async () => {
+    const dir = $('#cxProject').value.trim();
+    if (!dir) return cxSetResult('Enter a folder to scan for .logicx projects.', true);
+    try {
+      const { projects } = await companion.listProjects(dir);
+      renderProjectHits(projects);
+    } catch (err) {
+      cxSetResult(`Scan failed: ${err.message}`, true);
+    }
+  });
+
+  $('#cxDry').addEventListener('click', async () => {
+    const project = $('#cxProject').value.trim();
+    const out = $('#cxOut').value.trim();
+    if (!project || !out) return cxSetResult('Enter a project path and an output folder.', true);
+    setBusyCx(true, 'Extracting dry stems…');
+    try {
+      const data = await companion.extractDry({
+        project,
+        out,
+        template: state.settings.template,
+        split: state.settings.split,
+        includeAll: state.settings.includeAll,
+      });
+      cxSetResult(summarizeRun(data), !data.ok);
+    } catch (err) {
+      cxSetResult(`Failed: ${err.message}`, true);
+    } finally {
+      setBusyCx(false);
+    }
+  });
+
+  $('#cxWet').addEventListener('click', async () => {
+    const project = $('#cxProject').value.trim();
+    const out = $('#cxOut').value.trim();
+    if (!project || !out) return cxSetResult('Enter a project path and an output folder.', true);
+    setBusyCx(true, 'Bouncing all tracks in Logic Pro… (this drives Logic — watch for permission prompts)');
+    try {
+      const data = await companion.bounceWet({ projects: [project], out, format: $('#cxFormat').value, bitDepth: $('#cxDepth').value });
+      cxSetResult(summarizeRun(data), !data.ok);
+    } catch (err) {
+      cxSetResult(`Failed: ${err.message}`, true);
+    } finally {
+      setBusyCx(false);
+    }
+  });
+
+  // Auto-pair from the URL fragment (set by `stem-companion.py --open`), else a saved session.
+  const pair = companion.readPairingFromHash();
+  if (pair) {
+    history.replaceState(null, '', location.pathname + location.search); // strip the token from the visible URL
+    $('#cxUrl').value = pair.base.replace(/^https?:\/\//, '');
+    $('#cxToken').value = pair.token;
+    companionConnect(pair.base, pair.token, { announce: false });
+  } else {
+    const saved = companion.loadSaved();
+    if (saved) {
+      $('#cxUrl').value = saved.base.replace(/^https?:\/\//, '');
+      $('#cxToken').value = saved.token;
+      companionConnect(saved.base, saved.token, { announce: false });
+    }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', wire);

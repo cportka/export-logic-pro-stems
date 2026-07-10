@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows Keep
 (https://keepachangelog.com) and the project uses Semantic Versioning (https://semver.org).
 Every change bumps the version and adds an entry below.
 
+## [0.3.0] - 2026-07-10
+
+### Added
+- **Local companion** (`companion/stem-companion.py`) — a small Python-stdlib daemon that lets the
+  web UI run native work on your Mac while you stay in the browser: it extracts dry stems straight
+  to disk and bounces **wet** stems through Logic Pro. It binds `127.0.0.1` only, is gated by a
+  per-run **pairing token**, allow-lists request origins, answers CORS + Private-Network preflights
+  (so the GitHub Pages app can reach it), and exposes only fixed, validated endpoints — no arbitrary
+  shell.
+- A **Companion card** in the app: pair via the URL fragment (from `--open`) or by hand, see the
+  connection + whether Logic Pro was detected, scan a folder for `.logicx` projects, and run
+  "Extract dry stems → disk" or "Export wet stems (Logic Pro)" — with the run output shown inline.
+
 ## [0.2.0] - 2026-07-10
 
 ### Added

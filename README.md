@@ -1,6 +1,6 @@
 # Export Logic Pro Stems
 
-> **Version:** 0.2.0 · **App:** [cportka.github.io/export-logic-pro-stems](https://cportka.github.io/export-logic-pro-stems/) · **License:** [MIT](./LICENSE) · **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
+> **Version:** 0.3.0 · **App:** [cportka.github.io/export-logic-pro-stems](https://cportka.github.io/export-logic-pro-stems/) · **License:** [MIT](./LICENSE) · **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 
 Export stems from Logic Pro projects — **both** the dry recorded audio **and** wet stems with the
 channel-strip effects and automation baked in.
@@ -72,6 +72,20 @@ you to finish, and `--manual` just opens each project at the right menu. The web
 card generates the exact command for your chosen settings; drop the bounced folder back into the app
 to rename, split, and ZIP it.
 
+## Drive everything from the UI — the local companion
+
+Want to stay in the app and have it run the scripts and Logic Pro for you? Run the
+**[local companion](./companion/)** on your Mac:
+
+```bash
+python3 companion/stem-companion.py --open
+```
+
+It opens the app already paired. The app's **"Local companion"** card can then **extract dry stems
+straight to disk** and **bounce wet stems through Logic Pro** — you never leave the browser. The
+companion binds `127.0.0.1` only and is gated by a per-run pairing token (details + security notes in
+[`companion/README.md`](./companion/README.md)).
+
 ## Development
 
 This repo follows the **Portka standard workflow** (see [.claude/CLAUDE.md](./.claude/CLAUDE.md)) and
@@ -92,11 +106,14 @@ conventions.
 ### Project layout
 
 ```
-docs/                     GitHub Pages app (static, no build)
-  index.html  css/  js/stem-lib.js (pure)  js/app.js (browser UI)
+docs/                     GitHub Pages app + PWA (static, no build)
+  index.html  css/  manifest.webmanifest  sw.js  icons/
+  js/stem-lib.js (pure)  js/app.js (browser UI)  js/companion.js (companion client)
 scripts/
   extract-dry-stems.py    dry stems on any OS (stdlib)
   bounce-wet-stems.sh     wet stems on macOS via Logic Pro
   bounce-wet-stems.applescript
-tests/                    node --test suites + run-tests.sh
+companion/
+  stem-companion.py       local daemon the web UI calls (runs the scripts / drives Logic)
+tests/                    node --test + python unittest suites, run-tests.sh
 ```

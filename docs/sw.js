@@ -1,7 +1,7 @@
 // sw.js — service worker: cache the app shell so the exporter installs as a PWA and works
 // offline. Cache-first for the shell (all static, no API), network fallback for the rest.
 // Bump CACHE on every release so a new deploy invalidates the old shell.
-const CACHE = 'stems-v0.2.0';
+const CACHE = 'stems-v0.3.0';
 const SHELL = [
   './',
   './index.html',

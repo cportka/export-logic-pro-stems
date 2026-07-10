@@ -55,10 +55,10 @@
       </section>
 
       <!-- wet stems helper -->
-      <section class="card" id="wetCard">
+      <section class="card collapse" id="wetCard">
         <div class="head" id="wetHead">
           <h2 style="margin: 0">Wet stems — effects &amp; automation (macOS + Logic Pro)</h2>
-          <button id="wetToggle" aria-expanded="false" aria-label="Toggle wet-stem instructions">＋</button>
+          <button id="wetToggle" class="toggle" aria-expanded="false" aria-label="Toggle wet-stem instructions">＋</button>
         </div>
         <div class="body">
           <p class="lede">
@@ -83,6 +83,62 @@
           <div class="cmd-row">
             <code id="wetCmd">./scripts/bounce-wet-stems.sh --out "~/Desktop/Stems" --format wav --bit-depth 24 "/path/to/Project.logicx"</code>
             <button id="copyCmd" class="btn small">Copy</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- local companion -->
+      <section class="card collapse" id="companionCard">
+        <div class="head" id="companionHead">
+          <h2 style="margin: 0">Local companion — run scripts &amp; drive Logic from here (optional)</h2>
+          <span id="companionStatus" class="badge">Not connected</span>
+          <button id="companionToggle" class="toggle" aria-expanded="false" aria-label="Toggle companion panel">＋</button>
+        </div>
+        <div class="body">
+          <p class="lede">
+            Run the small companion on your Mac and this app can extract dry stems <strong>straight to
+            disk</strong> and bounce <strong>wet</strong> stems through Logic Pro — you stay in this UI.
+            It listens only on <code>127.0.0.1</code> and needs the one-time pairing token it prints.
+          </p>
+          <div class="cmd-row">
+            <code id="companionRun">python3 companion/stem-companion.py --open</code>
+            <button id="copyRun" class="btn small">Copy</button>
+          </div>
+
+          <div id="connectForm" class="wet-opts" style="margin-top: 12px">
+            <div class="field"><label for="cxUrl">Companion address</label><input id="cxUrl" type="text" value="127.0.0.1:8765" spellcheck="false" /></div>
+            <div class="field"><label for="cxToken">Pairing token</label><input id="cxToken" type="text" placeholder="from the companion window" spellcheck="false" /></div>
+            <div class="field" style="justify-content: flex-end"><button id="cxConnect" class="btn">Connect</button></div>
+          </div>
+
+          <div id="connectedPanel" hidden>
+            <p id="cxInfo" class="hint"></p>
+            <div class="wet-opts">
+              <div class="field">
+                <label for="cxProject">Project (.logicx) or a folder of projects</label>
+                <input id="cxProject" type="text" placeholder="/path/to/MySong.logicx" spellcheck="false" />
+              </div>
+              <div class="field">
+                <label for="cxOut">Output folder on disk</label>
+                <input id="cxOut" type="text" value="~/Desktop/Stems" spellcheck="false" />
+              </div>
+              <div class="field">
+                <label for="cxDepth">Wet format / depth</label>
+                <div style="display: flex; gap: 6px">
+                  <select id="cxFormat"><option value="wav">WAV</option><option value="aiff">AIFF</option><option value="caf">CAF</option></select>
+                  <select id="cxDepth"><option value="24">24-bit</option><option value="16">16-bit</option></select>
+                </div>
+              </div>
+            </div>
+            <div id="cxProjects"></div>
+            <div class="actions">
+              <button id="cxScan" class="btn small">Scan folder…</button>
+              <button id="cxDry" class="btn">Extract dry stems → disk</button>
+              <button id="cxWet" class="btn primary">Export wet stems (Logic Pro)</button>
+              <span class="spacer"></span>
+              <button id="cxDisconnect" class="btn small">Disconnect</button>
+            </div>
+            <pre id="cxResult"></pre>
           </div>
         </div>
       </section>
