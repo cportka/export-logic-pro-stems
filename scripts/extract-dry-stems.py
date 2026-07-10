@@ -155,7 +155,42 @@ def duration_of(path: str):
     return None
 
 
-def split_wav(src: str, ref_seconds: float, out_dir: str, project: str, track: str, template: str, dry_run: bool, used: set):
+def convert_pcm_depth(frames: bytes, src_width: int, dst_width: int) -> bytes:
+    """Convert interleaved little-endian PCM sample bytes between 16- and 24-bit. Channel-agnostic
+    (it works one sample at a time). Returns the frames unchanged for width pairs it can't convert."""
+    if src_width == dst_width:
+        return frames
+    out = bytearray()
+    if src_width == 3 and dst_width == 2:  # 24 -> 16: keep the high two bytes
+        for i in range(0, len(frames) - 2, 3):
+            out += frames[i + 1:i + 3]
+    elif src_width == 2 and dst_width == 3:  # 16 -> 24: pad a zero low byte
+        for i in range(0, len(frames) - 1, 2):
+            out += b"\x00" + frames[i:i + 2]
+    else:
+        return frames
+    return bytes(out)
+
+
+def reencode_wav_depth(src: str, dest: str, target_width: int) -> bool:
+    """Re-encode a PCM WAV to target_width (2 or 3 bytes). Returns True if it wrote dest, or False
+    if the source can't be converted (non-PCM, unusual width, or already at target) — the caller
+    then copies it losslessly instead."""
+    try:
+        with wave.open(src, "rb") as w:
+            params = w.getparams()
+            if params.sampwidth not in (2, 3) or params.sampwidth == target_width:
+                return False
+            frames = convert_pcm_depth(w.readframes(params.nframes), params.sampwidth, target_width)
+        with wave.open(dest, "wb") as o:
+            o.setparams(params._replace(sampwidth=target_width))
+            o.writeframes(frames)
+        return True
+    except Exception:
+        return False
+
+
+def split_wav(src: str, ref_seconds: float, out_dir: str, project: str, track: str, template: str, dry_run: bool, used: set, target_width=None):
     """Slice a WAV into equal takes of ref_seconds. Returns the number of files written, or 0 to
     signal the caller should fall back to a whole-file copy (too short, or unparseable by stdlib
     `wave` — e.g. a 24-bit WAVE_FORMAT_EXTENSIBLE or float WAV, common in real DAW exports)."""
@@ -179,9 +214,13 @@ def split_wav(src: str, ref_seconds: float, out_dir: str, project: str, track: s
             dest = os.path.join(out_dir, name)
             print(f"  split  {name}")
             if not dry_run:
+                p_out, fr_out = params, frames
+                if target_width and params.sampwidth in (2, 3) and target_width != params.sampwidth:
+                    fr_out = convert_pcm_depth(frames, params.sampwidth, target_width)
+                    p_out = params._replace(sampwidth=target_width)
                 with wave.open(dest, "wb") as o:
-                    o.setparams(params)
-                    o.writeframes(frames)
+                    o.setparams(p_out)
+                    o.writeframes(fr_out)
             written += 1
         return written
 
@@ -224,9 +263,12 @@ def main(argv=None) -> int:
     ap.add_argument("--template", default="{project}_{track}", help="filename template: {project} {track} {take}")
     ap.add_argument("--split", action="store_true", help="split multi-take files into takes by a reference length (WAV only)")
     ap.add_argument("--ref", default="", help="reference keyword or filename substring (default: COMP/ROUGH/project)")
+    ap.add_argument("--format", choices=["passthrough", "wav16", "wav24"], default="passthrough",
+                    help="passthrough copies losslessly; wav16/wav24 re-encode PCM WAV to that bit depth (non-PCM is copied)")
     ap.add_argument("--include-all", action="store_true", help="include all audio inside a .logicx package, not just Media/")
     ap.add_argument("--dry-run", action="store_true", help="print what would be written without writing")
     args = ap.parse_args(argv)
+    target_width = {"passthrough": None, "wav16": 2, "wav24": 3}[args.format]
 
     items = list(collect_inputs(args.inputs, args.include_all))
     if not items:
@@ -265,16 +307,19 @@ def main(argv=None) -> int:
             ext = os.path.splitext(path)[1].lower()
             do_split = bool(args.split and ref_seconds and path != ref_path and ext in (".wav", ".wave"))
             if do_split:
-                wrote = split_wav(path, ref_seconds, out_dir, project, track, args.template, args.dry_run, used)
+                wrote = split_wav(path, ref_seconds, out_dir, project, track, args.template, args.dry_run, used, target_width)
                 if wrote:
                     total_written += wrote
                     continue
                 # fall through to a whole-file copy if it was too short or unreadable to split
             name = uniquify(build_name(args.template, project, track, ext=ext), used)
             dest = os.path.join(out_dir, name)
-            print(f"  copy   {name}")
-            if not args.dry_run:
-                shutil.copy2(path, dest)
+            if target_width and ext in (".wav", ".wave") and not args.dry_run and reencode_wav_depth(path, dest, target_width):
+                print(f"  wav{target_width * 8}  {name}")
+            else:
+                print(f"  copy   {name}")
+                if not args.dry_run:
+                    shutil.copy2(path, dest)
             total_written += 1
 
     print(f"\nDone: {total_written} file(s){' (dry-run)' if args.dry_run else ''}.")

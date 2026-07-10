@@ -1,6 +1,6 @@
 {
   "name": "export-logic-pro-stems",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Export stems from Logic Pro projects — dry (raw per-track media) fully in the browser via a GitHub Pages app, and wet (effects + automation) via a macOS Logic Pro companion.",
   "type": "module",
   "private": true,

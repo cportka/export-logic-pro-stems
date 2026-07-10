@@ -9,6 +9,7 @@ import json
 import pathlib
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -111,6 +112,27 @@ class Companion(unittest.TestCase):
     def test_bounce_requires_projects(self):
         code, _, _ = req("POST", self.port, "/bounce-wet", token=TOKEN, body={"out": "/tmp/x"})
         self.assertEqual(code, 400)
+
+
+class Settle(unittest.TestCase):
+    def test_waits_for_files_to_appear_and_stabilize(self):
+        with tempfile.TemporaryDirectory() as d:
+            def writer():
+                time.sleep(0.15)
+                (pathlib.Path(d) / "a.wav").write_bytes(b"x" * 10)
+                time.sleep(0.15)
+                (pathlib.Path(d) / "a.wav").write_bytes(b"x" * 100)  # grow
+                (pathlib.Path(d) / "b.wav").write_bytes(b"y" * 50)   # then a second file, then stop
+            t = threading.Thread(target=writer)
+            t.start()
+            files = cx.wait_for_settle(d, appear_timeout=3, stable_secs=0.3, total_timeout=5, poll=0.05)
+            t.join()
+            self.assertEqual(sorted(files), ["a.wav", "b.wav"])
+
+    def test_returns_empty_when_nothing_appears(self):
+        with tempfile.TemporaryDirectory() as d:
+            files = cx.wait_for_settle(d, appear_timeout=0.3, stable_secs=0.2, total_timeout=1, poll=0.05)
+            self.assertEqual(files, [])
 
 
 if __name__ == "__main__":

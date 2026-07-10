@@ -30,8 +30,8 @@ python3 companion/stem-companion.py [--port 8765] [--open] \
 | :-- | :-- |
 | `GET /health` | version, platform, whether Logic Pro was detected |
 | `POST /projects` `{dir}` | list `.logicx` packages under a folder |
-| `POST /extract-dry` `{project,out,template?,split?,ref?,includeAll?}` | run `extract-dry-stems.py` |
-| `POST /bounce-wet` `{projects[],out,format?,bitDepth?,manual?}` | run `bounce-wet-stems.sh` (drives Logic) |
+| `POST /extract-dry` `{project,out,format?,template?,split?,ref?,includeAll?}` | run `extract-dry-stems.py` (`format`: `passthrough`\|`wav16`\|`wav24`) |
+| `POST /bounce-wet` `{projects[],out,format?,bitDepth?,manual?}` | run `bounce-wet-stems.sh` (drives Logic), then wait for the output to settle |
 
 ## Security
 

@@ -1,6 +1,6 @@
 # Export Logic Pro Stems
 
-> **Version:** 0.3.0 · **App:** [cportka.github.io/export-logic-pro-stems](https://cportka.github.io/export-logic-pro-stems/) · **License:** [MIT](./LICENSE) · **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
+> **Version:** 0.4.0 · **App:** [cportka.github.io/export-logic-pro-stems](https://cportka.github.io/export-logic-pro-stems/) · **License:** [MIT](./LICENSE) · **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 
 Export stems from Logic Pro projects — **both** the dry recorded audio **and** wet stems with the
 channel-strip effects and automation baked in.

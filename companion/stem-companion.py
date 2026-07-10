@@ -28,10 +28,11 @@ import os
 import secrets
 import subprocess
 import sys
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_APP_URL = "https://cportka.github.io/export-logic-pro-stems/"
 
@@ -91,6 +92,46 @@ def list_files(root):
             full = os.path.join(base, f)
             out.append(os.path.relpath(full, root))
     return sorted(out)
+
+
+def _snapshot(root):
+    snap = {}
+    for base, _dirs, files in os.walk(root):
+        for f in files:
+            p = os.path.join(base, f)
+            try:
+                snap[os.path.relpath(p, root)] = os.path.getsize(p)
+            except OSError:
+                pass
+    return snap
+
+
+def wait_for_settle(root, appear_timeout=90.0, stable_secs=3.0, total_timeout=3600.0, poll=1.0):
+    """Wait for output under `root` to appear and stop changing, then return its file list.
+
+    Logic renders the bounce in the background, so bounce-wet-stems.sh can return before the audio
+    is fully written. This polls the folder until the file set + sizes hold steady for `stable_secs`
+    (or `total_timeout`). It is cheap when files are already present and static, and returns [] if
+    nothing appears within `appear_timeout`.
+    """
+    start = time.monotonic()
+    while not _snapshot(root):
+        if time.monotonic() - start > appear_timeout:
+            return []
+        time.sleep(poll)
+    last = _snapshot(root)
+    stable_start = time.monotonic()
+    while True:
+        time.sleep(poll)
+        cur = _snapshot(root)
+        if cur == last:
+            if time.monotonic() - stable_start >= stable_secs:
+                return sorted(cur.keys())
+        else:
+            last = cur
+            stable_start = time.monotonic()
+        if time.monotonic() - start > total_timeout:
+            return sorted(cur.keys())
 
 
 # ---------------------------------------------------------------------------- request handler
@@ -215,6 +256,8 @@ class Handler(BaseHTTPRequestHandler):
         argv = [sys.executable, os.path.join(CONFIG["scripts_dir"], "extract-dry-stems.py"), "-o", out]
         if body.get("template"):
             argv += ["--template", str(body["template"])]
+        if body.get("format") in ("wav16", "wav24"):
+            argv += ["--format", body["format"]]
         if body.get("split"):
             argv += ["--split"]
             if body.get("ref"):
@@ -245,8 +288,14 @@ class Handler(BaseHTTPRequestHandler):
             argv += ["--dry-run"]
         argv += [os.path.abspath(os.path.expanduser(p)) for p in projects]
         code, so, se = run_script(argv, timeout=3600)
+        # Logic renders in the background; on success wait for the output to settle so the reported
+        # file list reflects the finished bounce, not a half-written folder.
+        if code == 0 and os.path.isdir(out):
+            files, settled = wait_for_settle(out), True
+        else:
+            files, settled = (list_files(out) if os.path.isdir(out) else []), False
         self._send(200, {"ok": code == 0, "code": code, "stdout": so, "stderr": se,
-                         "out": out, "files": list_files(out) if os.path.isdir(out) else []})
+                         "out": out, "files": files, "settled": settled})
 
 
 def build_server(host, port):

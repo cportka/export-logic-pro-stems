@@ -753,6 +753,7 @@ function wireCompanion() {
       const data = await companion.extractDry({
         project,
         out,
+        format: state.settings.format,
         template: state.settings.template,
         split: state.settings.split,
         includeAll: state.settings.includeAll,

@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows Keep
 (https://keepachangelog.com) and the project uses Semantic Versioning (https://semver.org).
 Every change bumps the version and adds an entry below.
 
+## [0.4.0] - 2026-07-10
+
+### Added
+- **Dry format parity.** `extract-dry-stems.py` gains `--format {passthrough,wav16,wav24}` — it can
+  now re-encode PCM WAV stems to 16- or 24-bit (pure-Python bit-depth conversion; non-PCM sources are
+  copied losslessly), matching the browser app. The companion's "Extract dry stems → disk" honors the
+  app's chosen output format.
+
+### Changed
+- **More reliable wet bounces.** After running the Logic bounce, the companion waits for the output
+  folder to *settle* (Logic renders in the background) before reporting, so the returned file list
+  reflects the finished export rather than a half-written folder.
+
 ## [0.3.0] - 2026-07-10
 
 ### Added
