@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build / OS cruft
+.DS_Store
+Thumbs.db
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Local scratch
+/tmp-verify/
