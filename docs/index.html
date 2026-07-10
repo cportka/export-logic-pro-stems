@@ -9,6 +9,11 @@
       content="Extract, split, rename, and download stems from Logic Pro projects — dry stems entirely in your browser, wet stems (effects + automation) via a macOS Logic Pro companion. Nothing is uploaded."
     />
     <link rel="icon" href="favicon.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#d9722c" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Stem Exporter" />
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
@@ -141,6 +146,7 @@
 
         <div class="actions">
           <button id="zipBtn" class="btn primary" disabled>Download ZIP</button>
+          <button id="folderBtn" class="btn" disabled hidden>Save to folder…</button>
           <button id="dlBtn" class="btn" disabled>Download individually</button>
           <button id="clearBtn" class="btn small">Clear</button>
           <span class="spacer"></span>

@@ -283,6 +283,85 @@ async function downloadIndividually() {
   }
 }
 
+/* ------------------------------------------ File System Access: save to a folder */
+
+// Tiny IndexedDB key/value store, used to remember the chosen output directory handle so the
+// user picks their folder once and the app can write straight into it on later visits.
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('stem-exporter', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const q = db.transaction('kv', 'readonly').objectStore('kv').get(key);
+    q.onsuccess = () => res(q.result);
+    q.onerror = () => rej(q.error);
+  });
+}
+async function idbSet(key, val) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+// Reuse a remembered directory if we still have permission; otherwise show the picker.
+async function getOutputDir() {
+  try {
+    const saved = await idbGet('outdir');
+    if (saved) {
+      if ((await saved.queryPermission?.({ mode: 'readwrite' })) === 'granted') return saved;
+      if ((await saved.requestPermission?.({ mode: 'readwrite' })) === 'granted') return saved;
+    }
+  } catch {
+    /* fall through to the picker */
+  }
+  const dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'stem-exporter-out' });
+  try {
+    await idbSet('outdir', dir);
+  } catch {
+    /* persistence is best-effort */
+  }
+  return dir;
+}
+
+async function saveToFolder() {
+  const items = selectedItems();
+  if (!items.length) return setStatus('Nothing selected.', true);
+  let dir;
+  try {
+    dir = await getOutputDir();
+  } catch (err) {
+    if (err && err.name !== 'AbortError') setStatus(`Could not open a folder: ${err.message}`, true);
+    return; // user cancelled the picker
+  }
+  setBusy(true);
+  try {
+    const entries = await collectEntries(items, (d, t) => setStatus(`Processing ${d}/${t}…`));
+    let n = 0;
+    for (const e of entries) {
+      const handle = await dir.getFileHandle(e.name, { create: true });
+      const writable = await handle.createWritable();
+      await writable.write(e.data);
+      await writable.close();
+      n++;
+    }
+    setStatus(`Wrote ${n} file${n === 1 ? '' : 's'} to “${dir.name}”.`);
+  } catch (err) {
+    setStatus(`Write failed: ${err.message}`, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
 /* -------------------------------------------------------------------- render */
 
 function setStatus(msg, isError = false) {
@@ -293,8 +372,10 @@ function setStatus(msg, isError = false) {
 
 function setBusy(busy) {
   document.body.classList.toggle('busy', busy);
-  $('#zipBtn').disabled = busy;
-  $('#dlBtn').disabled = busy;
+  for (const id of ['#zipBtn', '#dlBtn', '#folderBtn']) {
+    const b = $(id);
+    if (b) b.disabled = busy;
+  }
 }
 
 /** Short badge describing where an audio file came from. */
@@ -355,8 +436,11 @@ function renderRowMeta(item) {
 function updateCounts() {
   const sel = selectedItems().length;
   $('#selCount').textContent = `${sel} of ${state.items.length} selected`;
-  $('#zipBtn').disabled = sel === 0 || document.body.classList.contains('busy');
-  $('#dlBtn').disabled = sel === 0 || document.body.classList.contains('busy');
+  const disabled = sel === 0 || document.body.classList.contains('busy');
+  for (const id of ['#zipBtn', '#dlBtn', '#folderBtn']) {
+    const b = $(id);
+    if (b) b.disabled = disabled;
+  }
   const all = $('#selectAll');
   all.checked = sel > 0 && sel === state.items.length;
   all.indeterminate = sel > 0 && sel < state.items.length;
@@ -472,6 +556,14 @@ function wire() {
   $('#zipBtn').addEventListener('click', downloadZip);
   $('#dlBtn').addEventListener('click', downloadIndividually);
 
+  // "Save to folder" only where the File System Access API exists (Chromium desktop); the ZIP
+  // download is the universal fallback everywhere else.
+  const folderBtn = $('#folderBtn');
+  if (folderBtn && 'showDirectoryPicker' in window) {
+    folderBtn.hidden = false;
+    folderBtn.addEventListener('click', saveToFolder);
+  }
+
   // theme toggle: auto → light → dark
   const themeBtn = $('#themeBtn');
   if (themeBtn) {
@@ -503,3 +595,8 @@ function wire() {
 }
 
 document.addEventListener('DOMContentLoaded', wire);
+
+// Register the service worker so the app installs as a PWA and works offline.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed', e));
+}

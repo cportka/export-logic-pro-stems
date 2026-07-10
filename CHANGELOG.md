@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows Keep
 (https://keepachangelog.com) and the project uses Semantic Versioning (https://semver.org).
 Every change bumps the version and adds an entry below.
 
+## [0.2.0] - 2026-07-10
+
+### Added
+- The web app is now an installable **PWA**: add it to your dock / home screen, it runs **offline**
+  (a service worker caches the app shell), and it ships app icons + a web manifest.
+- **"Save to folder…"** — in Chromium desktop browsers, the File System Access API writes the
+  exported stems straight into a folder you pick once (remembered across launches via IndexedDB),
+  instead of downloading a ZIP. The ZIP download remains the universal fallback everywhere else.
+
 ## [0.1.0] - 2026-07-09
 
 Initial release of the restarted project — proper stem export from Logic Pro projects, both dry and

@@ -1,6 +1,6 @@
 # Export Logic Pro Stems
 
-> **Version:** 0.1.0 · **App:** [cportka.github.io/export-logic-pro-stems](https://cportka.github.io/export-logic-pro-stems/) · **License:** [MIT](./LICENSE) · **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
+> **Version:** 0.2.0 · **App:** [cportka.github.io/export-logic-pro-stems](https://cportka.github.io/export-logic-pro-stems/) · **License:** [MIT](./LICENSE) · **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 
 Export stems from Logic Pro projects — **both** the dry recorded audio **and** wet stems with the
 channel-strip effects and automation baked in.
@@ -27,6 +27,19 @@ Open **[the app](https://cportka.github.io/export-logic-pro-stems/)** and:
 4. **Download** them individually or as a single ZIP.
 
 Everything runs client-side; your audio never leaves your machine.
+
+### Install it as a desktop app (PWA)
+
+The app is a **Progressive Web App**: in a Chromium browser (Chrome / Edge / Arc / Brave) click the
+install icon in the address bar to add it to your dock or home screen. It then opens in its own
+window, works **offline**, and — via the File System Access API — offers **"Save to folder…"**,
+which writes the exported stems straight into a folder you pick once (remembered across launches)
+instead of downloading a ZIP. Other browsers (Safari, Firefox) use the ZIP download.
+
+> A browser — even an installed PWA — can't run Logic Pro. The PWA fully handles **dry** stems; for
+> **wet** stems it still hands you the [companion command](#wet-stems-effects--automation--macos--logic-pro).
+> Driving Logic from inside the UI needs a native shell (e.g. Tauri/Electron) around this same
+> front-end — a natural next step.
 
 ### The same thing from the command line
 
